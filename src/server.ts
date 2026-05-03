@@ -21,12 +21,22 @@ type ExistingEntryTimestamps = {
   created_at: string;
 };
 
+type LoginAttemptState = {
+  failures: number;
+  blockedUntil: number | null;
+};
+
+const loginWindowMs = 24 * 60 * 60 * 1000;
+const maxFailedLoginAttempts = 3;
+const loginAttempts = new Map<string, LoginAttemptState>();
+
 const app = express();
 const port = Number(process.env.PORT ?? 3000);
 const cookieName = process.env.COOKIE_NAME ?? 'activity_session';
 const webDist = path.join(process.cwd(), 'web', 'dist');
 const indexFile = path.join(webDist, 'index.html');
 
+app.set('trust proxy', 1);
 app.use(express.json());
 app.use(cookieParser());
 
@@ -36,6 +46,53 @@ function isValidDate(value: string): boolean {
 
 function sqliteTimestamp(date = new Date()): string {
   return date.toISOString().slice(0, 19).replace('T', ' ');
+}
+
+function clientIp(req: Request): string {
+  return req.ip || req.socket.remoteAddress || 'unknown';
+}
+
+function loginBlockRemaining(blockedUntil: number): number {
+  return Math.max(1, Math.ceil((blockedUntil - Date.now()) / 1000));
+}
+
+function isLoginBlocked(ip: string): number | null {
+  const attempt = loginAttempts.get(ip);
+
+  if (!attempt?.blockedUntil) {
+    return null;
+  }
+
+  if (attempt.blockedUntil <= Date.now()) {
+    loginAttempts.delete(ip);
+    return null;
+  }
+
+  return loginBlockRemaining(attempt.blockedUntil);
+}
+
+function recordFailedLogin(ip: string): number | null {
+  const attempt = loginAttempts.get(ip);
+
+  if (!attempt) {
+    loginAttempts.set(ip, { failures: 1, blockedUntil: null });
+    return null;
+  }
+
+  const failures = attempt.failures + 1;
+
+  if (failures >= maxFailedLoginAttempts) {
+    const blockedUntil = Date.now() + loginWindowMs;
+    loginAttempts.set(ip, { failures, blockedUntil });
+    return loginBlockRemaining(blockedUntil);
+  }
+
+  loginAttempts.set(ip, { failures, blockedUntil: null });
+  return null;
+}
+
+function clearFailedLogins(ip: string) {
+  loginAttempts.delete(ip);
 }
 
 function rowsForSaving(rows: EntryRow[]): EntryRow[] {
@@ -134,12 +191,29 @@ app.post('/api/login', async (req, res) => {
     return res.status(500).json({ error: configError });
   }
 
+  const ip = clientIp(req);
+  const blockedFor = isLoginBlocked(ip);
+
+  if (blockedFor !== null) {
+    res.setHeader('Retry-After', String(blockedFor));
+    return res.status(429).json({ error: 'Too many login attempts. Try again tomorrow.' });
+  }
+
   const password = String(req.body?.password ?? '');
   const valid = await bcrypt.compare(password, process.env.APP_PASSWORD_HASH ?? '');
 
   if (!valid) {
+    const retryAfter = recordFailedLogin(ip);
+
+    if (retryAfter !== null) {
+      res.setHeader('Retry-After', String(retryAfter));
+      return res.status(429).json({ error: 'Too many login attempts. Try again tomorrow.' });
+    }
+
     return res.status(401).json({ error: 'Invalid password' });
   }
+
+  clearFailedLogins(ip);
 
   const token = jwt.sign(
     { authenticated: true },
