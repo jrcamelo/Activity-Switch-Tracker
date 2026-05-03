@@ -95,6 +95,11 @@ function normalizeTimeValue(value: string): string | null {
   return `${match[1]}:${match[2]}`;
 }
 
+function resizeTextarea(target: HTMLTextAreaElement) {
+  target.style.height = '0px';
+  target.style.height = `${target.scrollHeight}px`;
+}
+
 type AuthState = 'checking' | 'anonymous' | 'authenticated';
 
 export default function App() {
@@ -487,7 +492,7 @@ export default function App() {
                   <span aria-hidden="true" className="arrowSpacer" />
                 )}
 
-                <input
+                <textarea
                   className="textInput"
                   onChange={(event) =>
                     updateEntry(entry.id, (current) => ({
@@ -495,8 +500,14 @@ export default function App() {
                       text: event.target.value
                     }))
                   }
+                  onInput={(event) => resizeTextarea(event.currentTarget)}
                   placeholder="Write the next activity…"
-                  type="text"
+                  ref={(node) => {
+                    if (node) {
+                      resizeTextarea(node);
+                    }
+                  }}
+                  rows={1}
                   value={entry.text}
                 />
               </div>

@@ -28,7 +28,8 @@ body {
 }
 
 button,
-input {
+input,
+textarea {
   font: inherit;
 }
 
@@ -222,7 +223,7 @@ button {
 .row {
   display: grid;
   grid-template-columns: 22px 70px 46px minmax(0, 1fr);
-  align-items: center;
+  align-items: start;
   gap: 10px;
   min-height: 36px;
 }
@@ -298,6 +299,11 @@ button {
   padding: 0;
   color: #ebe4d7;
   background: transparent;
+  line-height: 1.45;
+  resize: none;
+  overflow: hidden;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .textInput::placeholder {
