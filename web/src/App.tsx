@@ -1,0 +1,469 @@
+import { useEffect, useRef, useState, type FormEvent } from 'react';
+
+import { ApiError, getCurrentSession, getDay, login, logout, putDay } from './api';
+import { addDays, formatDisplayDate, todayString } from './date';
+import { roundUpToFiveMinutes } from './time';
+import type { Arrow, Entry } from './types';
+
+const arrowCycle: readonly Arrow[] = ['→', '↝', '↻'] as const;
+const saveDelayMs = 500;
+
+function createId(): string {
+  if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+    return crypto.randomUUID();
+  }
+
+  return `entry-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createEmptyEntry(): Entry {
+  return {
+    id: createId(),
+    time: null,
+    arrow: '→',
+    text: ''
+  };
+}
+
+function isEmpty(entry: Entry): boolean {
+  return entry.time === null && entry.text.trim() === '';
+}
+
+function rowsForSaving(entries: Entry[]): Entry[] {
+  const rows = [...entries];
+
+  while (rows.length > 0 && isEmpty(rows[rows.length - 1])) {
+    rows.pop();
+  }
+
+  return rows;
+}
+
+function ensureTrailingEmpty(entries: Entry[]): Entry[] {
+  const rows = entries.length > 0 ? [...entries] : [];
+
+  if (rows.length === 0 || !isEmpty(rows[rows.length - 1])) {
+    rows.push(createEmptyEntry());
+  }
+
+  return rows;
+}
+
+function nextArrow(current: Arrow): Arrow {
+  return arrowCycle[(arrowCycle.indexOf(current) + 1) % arrowCycle.length];
+}
+
+function sanitizeTimeInput(value: string): string {
+  const digits = value.replace(/\D/g, '').slice(0, 4);
+
+  if (digits.length <= 2) {
+    return digits;
+  }
+
+  return `${digits.slice(0, 2)}:${digits.slice(2)}`;
+}
+
+function normalizeTimeValue(value: string): string | null {
+  if (value.trim() === '') {
+    return null;
+  }
+
+  const match = /^(\d{2}):(\d{2})$/.exec(value);
+  if (!match) {
+    return null;
+  }
+
+  const hours = Number(match[1]);
+  const minutes = Number(match[2]);
+
+  if (hours > 23 || minutes > 59) {
+    return null;
+  }
+
+  return `${match[1]}:${match[2]}`;
+}
+
+type AuthState = 'checking' | 'anonymous' | 'authenticated';
+
+export default function App() {
+  const [authState, setAuthState] = useState<AuthState>('checking');
+  const [selectedDate, setSelectedDate] = useState(() => todayString());
+  const [entries, setEntries] = useState<Entry[]>(() => [createEmptyEntry()]);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [isLoadingDay, setIsLoadingDay] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const lastPersistedSnapshotRef = useRef('[]');
+  const dirtyRef = useRef(false);
+  const saveTimerRef = useRef<number | null>(null);
+  const loadRequestRef = useRef(0);
+
+  useEffect(() => {
+    void (async () => {
+      try {
+        await getCurrentSession();
+        setAuthState('authenticated');
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 401) {
+          setAuthState('anonymous');
+          return;
+        }
+
+        setAuthState('anonymous');
+        setError('Unable to verify the current session.');
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    if (authState !== 'authenticated') {
+      return;
+    }
+
+    const requestId = ++loadRequestRef.current;
+    setIsLoadingDay(true);
+    setError(null);
+
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    void (async () => {
+      try {
+        const rows = await getDay(selectedDate);
+
+        if (requestId !== loadRequestRef.current) {
+          return;
+        }
+
+        setEntries(ensureTrailingEmpty(rows));
+        lastPersistedSnapshotRef.current = JSON.stringify(rowsForSaving(rows));
+        dirtyRef.current = false;
+      } catch (caught) {
+        if (caught instanceof ApiError && caught.status === 401) {
+          setAuthState('anonymous');
+          setEntries([createEmptyEntry()]);
+          return;
+        }
+
+        setError('Unable to load this day.');
+      } finally {
+        if (requestId === loadRequestRef.current) {
+          setIsLoadingDay(false);
+        }
+      }
+    })();
+  }, [authState, selectedDate]);
+
+  useEffect(() => {
+    if (authState !== 'authenticated' || isLoadingDay) {
+      return;
+    }
+
+    const snapshot = JSON.stringify(rowsForSaving(entries));
+
+    if (snapshot === lastPersistedSnapshotRef.current) {
+      dirtyRef.current = false;
+      return;
+    }
+
+    dirtyRef.current = true;
+
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+    }
+
+    saveTimerRef.current = window.setTimeout(() => {
+      void saveNow(selectedDate, entries);
+    }, saveDelayMs);
+
+    return () => {
+      if (saveTimerRef.current !== null) {
+        window.clearTimeout(saveTimerRef.current);
+        saveTimerRef.current = null;
+      }
+    };
+  }, [authState, entries, isLoadingDay, selectedDate]);
+
+  async function saveNow(date: string, currentEntries: Entry[]) {
+    const rows = rowsForSaving(currentEntries);
+    const snapshot = JSON.stringify(rows);
+
+    if (snapshot === lastPersistedSnapshotRef.current) {
+      dirtyRef.current = false;
+      return true;
+    }
+
+    setIsSaving(true);
+
+    try {
+      await putDay(date, rows);
+      lastPersistedSnapshotRef.current = snapshot;
+      dirtyRef.current = false;
+      setError(null);
+      return true;
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        setAuthState('anonymous');
+        return false;
+      }
+
+      setError('Unable to save changes.');
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  async function flushPendingSave() {
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    if (!dirtyRef.current || authState !== 'authenticated' || isLoadingDay) {
+      return true;
+    }
+
+    return saveNow(selectedDate, entries);
+  }
+
+  function updateEntries(updater: (current: Entry[]) => Entry[]) {
+    setEntries((current) => ensureTrailingEmpty(updater(current)));
+  }
+
+  function updateEntry(id: string, updater: (entry: Entry) => Entry) {
+    updateEntries((current) =>
+      current.map((entry) => (entry.id === id ? updater(entry) : entry))
+    );
+  }
+
+  function removeEntry(id: string) {
+    updateEntries((current) => current.filter((entry) => entry.id !== id));
+  }
+
+  async function navigateToDate(nextDate: string) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate === selectedDate) {
+      return;
+    }
+
+    const saved = await flushPendingSave();
+
+    if (saved) {
+      setSelectedDate(nextDate);
+    }
+  }
+
+  async function handleLoginSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setError(null);
+
+    try {
+      await login(password);
+      setPassword('');
+      setAuthState('authenticated');
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status === 401) {
+        setError('Invalid password.');
+        return;
+      }
+
+      setError('Unable to sign in.');
+    }
+  }
+
+  async function handleLogout() {
+    loadRequestRef.current += 1;
+
+    if (saveTimerRef.current !== null) {
+      window.clearTimeout(saveTimerRef.current);
+      saveTimerRef.current = null;
+    }
+
+    await flushPendingSave();
+
+    try {
+      await logout();
+    } finally {
+      setAuthState('anonymous');
+      setEntries([createEmptyEntry()]);
+      lastPersistedSnapshotRef.current = '[]';
+      dirtyRef.current = false;
+    }
+  }
+
+  if (authState === 'checking') {
+    return (
+      <main className="shell">
+        <section className="panel panel--centered">
+          <p className="muted">Checking session…</p>
+        </section>
+      </main>
+    );
+  }
+
+  if (authState === 'anonymous') {
+    return (
+      <main className="shell">
+        <section className="panel panel--login">
+          <div className="eyebrow">Activity Tracker</div>
+          <h1>Enter master password</h1>
+          <form className="loginForm" onSubmit={handleLoginSubmit}>
+            <input
+              autoComplete="current-password"
+              className="loginInput"
+              name="password"
+              onChange={(event) => setPassword(event.target.value)}
+              placeholder="Password"
+              type="password"
+              value={password}
+            />
+            <button className="primaryButton" type="submit">
+              Sign in
+            </button>
+          </form>
+          {error ? <p className="errorText">{error}</p> : null}
+        </section>
+      </main>
+    );
+  }
+
+  return (
+    <main className="shell">
+      <section className="panel">
+        <header className="toolbar">
+          <div className="dateNav">
+            <button
+              className="navButton"
+              onClick={() => void navigateToDate(addDays(selectedDate, -1))}
+              type="button"
+            >
+              ←
+            </button>
+            <label className="dateButton">
+              <span>{formatDisplayDate(selectedDate)}</span>
+              <input
+                aria-label="Select date"
+                className="dateInput"
+                onChange={(event) => void navigateToDate(event.target.value)}
+                type="date"
+                value={selectedDate}
+              />
+              <span aria-hidden="true" className="dateOverlay" />
+            </label>
+            <button
+              className="navButton"
+              onClick={() => void navigateToDate(addDays(selectedDate, 1))}
+              type="button"
+            >
+              →
+            </button>
+          </div>
+          <div className="statusGroup">
+            <span className="statusText">
+              {isLoadingDay ? 'Loading…' : isSaving ? 'Saving…' : 'Saved'}
+            </span>
+            <button className="ghostButton" onClick={() => void handleLogout()} type="button">
+              Logout
+            </button>
+          </div>
+        </header>
+
+        {error ? <p className="errorText errorText--inline">{error}</p> : null}
+
+        <div className="page">
+          {entries.map((entry) => {
+            const hasTime = entry.time !== null;
+            const canRemove = entry.text.trim() === '' && entries.length > 1;
+
+            return (
+              <div className="row" key={entry.id}>
+                {canRemove ? (
+                  <button
+                    aria-label="Remove row"
+                    className="removeButton"
+                    onClick={() => removeEntry(entry.id)}
+                    type="button"
+                  >
+                    -
+                  </button>
+                ) : (
+                  <span aria-hidden="true" className="removeSpacer" />
+                )}
+
+                {hasTime ? (
+                  <input
+                    className="timeInput"
+                    onChange={(event) =>
+                      updateEntry(entry.id, (current) => ({
+                        ...current,
+                        time: sanitizeTimeInput(event.target.value)
+                      }))
+                    }
+                    onBlur={(event) =>
+                      updateEntry(entry.id, (current) => ({
+                        ...current,
+                        time: normalizeTimeValue(event.target.value)
+                      }))
+                    }
+                    inputMode="numeric"
+                    maxLength={5}
+                    pattern="[0-9]{2}:[0-9]{2}"
+                    placeholder="hh:mm"
+                    type="text"
+                    value={entry.time ?? ''}
+                  />
+                ) : (
+                  <button
+                    className="timeButton"
+                    onClick={() =>
+                      updateEntry(entry.id, (current) => ({
+                        ...current,
+                        time: roundUpToFiveMinutes()
+                      }))
+                    }
+                    type="button"
+                  >
+                    <span className="timePlaceholder">hh:mm</span>
+                  </button>
+                )}
+
+                {hasTime ? (
+                  <button
+                    className="arrowButton"
+                    onClick={() =>
+                      updateEntry(entry.id, (current) => ({
+                        ...current,
+                        arrow: nextArrow(current.arrow)
+                      }))
+                    }
+                    type="button"
+                  >
+                    {entry.arrow}
+                  </button>
+                ) : (
+                  <span aria-hidden="true" className="arrowSpacer" />
+                )}
+
+                <input
+                  className="textInput"
+                  onChange={(event) =>
+                    updateEntry(entry.id, (current) => ({
+                      ...current,
+                      text: event.target.value
+                    }))
+                  }
+                  placeholder="Write the next activity…"
+                  type="text"
+                  value={entry.text}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </section>
+    </main>
+  );
+}
