@@ -1,19 +1,11 @@
-# Activity Tracker
+# Activity Switch Tracker
 
 Simple personal tracker for logging context switches.
 
 This is not a task manager. It does not track completion, productivity, failure, or blame.  
 The goal is simply to add a small amount of friction before switching tasks.
 
-Example:
-
-```txt
-14:10 → starting task X
-14:30 ↝ got distracted
-15:00 ↝ shower
-15:20 ↻ task X
-15:45 → starting task Y 
-```
+![Demo](./demo.jpg)
 
 ## Symbols
 
