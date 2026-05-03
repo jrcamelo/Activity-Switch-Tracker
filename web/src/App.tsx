@@ -7,6 +7,7 @@ import type { Arrow, Entry } from './types';
 
 const arrowCycle: readonly Arrow[] = ['→', '↝', '↻'] as const;
 const saveDelayMs = 500;
+const isDemoPage = window.location.pathname === '/demo';
 
 function createId(): string {
   if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
@@ -53,6 +54,17 @@ function nextArrow(current: Arrow): Arrow {
   return arrowCycle[(arrowCycle.indexOf(current) + 1) % arrowCycle.length];
 }
 
+function demoEntries(): Entry[] {
+  return [
+    { id: 'demo-1', time: '14:10', arrow: '→', text: 'starting task X' },
+    { id: 'demo-2', time: '14:30', arrow: '↝', text: 'got distracted' },
+    { id: 'demo-3', time: '15:00', arrow: '↝', text: 'shower' },
+    { id: 'demo-4', time: '15:20', arrow: '↻', text: 'task X' },
+    { id: 'demo-5', time: '15:45', arrow: '→', text: 'starting task Y' },
+    createEmptyEntry()
+  ];
+}
+
 function sanitizeTimeInput(value: string): string {
   const digits = value.replace(/\D/g, '').slice(0, 4);
 
@@ -86,9 +98,9 @@ function normalizeTimeValue(value: string): string | null {
 type AuthState = 'checking' | 'anonymous' | 'authenticated';
 
 export default function App() {
-  const [authState, setAuthState] = useState<AuthState>('checking');
+  const [authState, setAuthState] = useState<AuthState>(isDemoPage ? 'authenticated' : 'checking');
   const [selectedDate, setSelectedDate] = useState(() => todayString());
-  const [entries, setEntries] = useState<Entry[]>(() => [createEmptyEntry()]);
+  const [entries, setEntries] = useState<Entry[]>(() => (isDemoPage ? demoEntries() : [createEmptyEntry()]));
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isLoadingDay, setIsLoadingDay] = useState(false);
@@ -100,6 +112,10 @@ export default function App() {
   const loadRequestRef = useRef(0);
 
   useEffect(() => {
+    if (isDemoPage) {
+      return;
+    }
+
     void (async () => {
       try {
         await getCurrentSession();
@@ -117,6 +133,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    if (isDemoPage) {
+      setEntries(demoEntries());
+      setIsLoadingDay(false);
+      return;
+    }
+
     if (authState !== 'authenticated') {
       return;
     }
@@ -158,6 +180,10 @@ export default function App() {
   }, [authState, selectedDate]);
 
   useEffect(() => {
+    if (isDemoPage) {
+      return;
+    }
+
     if (authState !== 'authenticated' || isLoadingDay) {
       return;
     }
@@ -188,6 +214,10 @@ export default function App() {
   }, [authState, entries, isLoadingDay, selectedDate]);
 
   async function saveNow(date: string, currentEntries: Entry[]) {
+    if (isDemoPage) {
+      return true;
+    }
+
     const rows = rowsForSaving(currentEntries);
     const snapshot = JSON.stringify(rows);
 
@@ -218,6 +248,10 @@ export default function App() {
   }
 
   async function flushPendingSave() {
+    if (isDemoPage) {
+      return true;
+    }
+
     if (saveTimerRef.current !== null) {
       window.clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
@@ -362,12 +396,18 @@ export default function App() {
             </button>
           </div>
           <div className="statusGroup">
-            <span className="statusText">
-              {isLoadingDay ? 'Loading…' : isSaving ? 'Saving…' : 'Saved'}
-            </span>
-            <button className="ghostButton" onClick={() => void handleLogout()} type="button">
-              Logout
-            </button>
+            {isDemoPage ? (
+              <span className="statusText">Demo mode</span>
+            ) : (
+              <>
+                <span className="statusText">
+                  {isLoadingDay ? 'Loading…' : isSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button className="ghostButton" onClick={() => void handleLogout()} type="button">
+                  Logout
+                </button>
+              </>
+            )}
           </div>
         </header>
 
