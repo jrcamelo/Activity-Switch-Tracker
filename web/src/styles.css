@@ -1,12 +1,12 @@
 :root {
   font-family: "IBM Plex Sans", "Segoe UI", sans-serif;
-  color: #1d1a17;
+  color: #ebe4d7;
   background:
-    radial-gradient(circle at top, rgba(205, 180, 145, 0.25), transparent 40%),
-    linear-gradient(180deg, #f5efe2 0%, #efe6d6 100%);
+    radial-gradient(circle at top, rgba(93, 120, 128, 0.18), transparent 40%),
+    linear-gradient(180deg, #101418 0%, #0a0d10 100%);
   line-height: 1.4;
   font-weight: 400;
-  color-scheme: light;
+  color-scheme: dark;
 }
 
 * {
@@ -17,13 +17,13 @@ body {
   margin: 0;
   min-height: 100vh;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12)),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01)),
     repeating-linear-gradient(
       180deg,
       transparent 0,
       transparent 35px,
-      rgba(80, 106, 128, 0.08) 35px,
-      rgba(80, 106, 128, 0.08) 36px
+      rgba(111, 138, 158, 0.08) 35px,
+      rgba(111, 138, 158, 0.08) 36px
     );
 }
 
@@ -49,10 +49,10 @@ button {
   width: min(960px, 100%);
   margin: 0 auto;
   padding: 28px 24px 40px;
-  border: 1px solid rgba(108, 88, 63, 0.16);
+  border: 1px solid rgba(168, 184, 194, 0.12);
   border-radius: 24px;
-  background: rgba(255, 251, 244, 0.88);
-  box-shadow: 0 24px 70px rgba(97, 78, 56, 0.12);
+  background: rgba(13, 18, 23, 0.88);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.35);
   backdrop-filter: blur(10px);
 }
 
@@ -73,7 +73,7 @@ button {
 }
 
 .eyebrow {
-  color: #875c34;
+  color: #d2a679;
   font-size: 0.78rem;
   font-weight: 700;
   letter-spacing: 0.16em;
@@ -97,8 +97,9 @@ button {
   width: 100%;
   padding: 14px 16px;
   border-radius: 14px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: inset 0 0 0 1px rgba(111, 87, 57, 0.12);
+  color: #efe8db;
+  background: rgba(255, 255, 255, 0.05);
+  box-shadow: inset 0 0 0 1px rgba(188, 203, 213, 0.12);
 }
 
 .primaryButton,
@@ -113,8 +114,8 @@ button {
 .primaryButton {
   padding: 14px 16px;
   border-radius: 14px;
-  background: #1f5d58;
-  color: #fefdf8;
+  background: #2d7a6b;
+  color: #f5f1e9;
   font-weight: 700;
 }
 
@@ -137,15 +138,16 @@ button {
 .ghostButton {
   padding: 8px 12px;
   border-radius: 999px;
-  color: #5a4634;
+  color: #c9d0d7;
   transition: background-color 120ms ease, color 120ms ease;
 }
 
 .navButton:hover,
 .ghostButton:hover,
 .arrowButton:hover,
-.timeButton:hover {
-  background: rgba(123, 97, 65, 0.1);
+.timeButton:hover,
+.removeButton:hover {
+  background: rgba(204, 218, 228, 0.08);
 }
 
 .dateButton {
@@ -156,11 +158,12 @@ button {
   min-width: 180px;
   padding: 10px 18px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.84);
+  background: rgba(255, 255, 255, 0.05);
   font-size: clamp(1.2rem, 2.7vw, 1.8rem);
   font-weight: 700;
   letter-spacing: 0.04em;
-  box-shadow: inset 0 0 0 1px rgba(111, 87, 57, 0.12);
+  color: #f1ecdf;
+  box-shadow: inset 0 0 0 1px rgba(188, 203, 213, 0.12);
 }
 
 .dateInput {
@@ -197,7 +200,7 @@ button {
 
 .statusText,
 .muted {
-  color: #6f6150;
+  color: #97a4af;
   font-size: 0.95rem;
 }
 
@@ -213,7 +216,7 @@ button {
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgba(181, 85, 73, 0.18);
+  background: rgba(185, 112, 94, 0.22);
 }
 
 .row {
@@ -240,7 +243,7 @@ button {
   align-items: center;
   justify-content: center;
   width: 22px;
-  color: #9f7f59;
+  color: #b8956c;
 }
 
 .removeButton {
@@ -256,7 +259,7 @@ button {
   width: 70px;
   padding: 0 8px 0 0;
   text-align: right;
-  color: #6e5a45;
+  color: #b9c4cd;
   font-variant-numeric: tabular-nums;
 }
 
@@ -264,7 +267,7 @@ button {
   display: inline-flex;
   align-items: center;
   justify-content: flex-end;
-  color: #b6a99b;
+  color: #73818d;
 }
 
 .timeInput {
@@ -286,23 +289,23 @@ button {
   align-items: center;
   justify-content: center;
   width: 46px;
-  color: #875c34;
+  color: #d2a679;
   font-size: 1.2rem;
 }
 
 .textInput {
   width: 100%;
   padding: 0;
-  color: #1d1a17;
+  color: #ebe4d7;
   background: transparent;
 }
 
 .textInput::placeholder {
-  color: #b7ad9f;
+  color: #697781;
 }
 
 .errorText {
-  color: #9f2d19;
+  color: #ff8e7c;
 }
 
 .errorText--inline {
