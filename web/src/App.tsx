@@ -283,6 +283,27 @@ export default function App() {
     updateEntries((current) => current.filter((entry) => entry.id !== id));
   }
 
+  function moveEntry(id: string, direction: -1 | 1) {
+    updateEntries((current) => {
+      const rows = [...current];
+      const index = rows.findIndex((entry) => entry.id === id);
+      const lastMovableIndex = rows.length - 2;
+
+      if (index < 0 || index > lastMovableIndex) {
+        return rows;
+      }
+
+      const nextIndex = index + direction;
+
+      if (nextIndex < 0 || nextIndex > lastMovableIndex) {
+        return rows;
+      }
+
+      [rows[index], rows[nextIndex]] = [rows[nextIndex], rows[index]];
+      return rows;
+    });
+  }
+
   async function navigateToDate(nextDate: string) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate) || nextDate === selectedDate) {
       return;
@@ -419,13 +440,40 @@ export default function App() {
         {error ? <p className="errorText errorText--inline">{error}</p> : null}
 
         <div className="page">
-          {entries.map((entry) => {
+          {entries.map((entry, index) => {
             const hasTime = entry.time !== null;
-            const canRemove = entry.text.trim() === '' && entries.length > 1;
+            const isTrailingEmptyRow = index === entries.length - 1;
+            const hasText = entry.text.trim() !== '';
+            const showArrowControl = hasTime || hasText;
+            const canMoveUp = index > 0 && !isTrailingEmptyRow;
+            const canMoveDown = index < entries.length - 2;
+            const showMoveControls = hasText && !isTrailingEmptyRow;
+            const canRemove = !hasText && entries.length > 1;
 
             return (
               <div className="row" key={entry.id}>
-                {canRemove ? (
+                {showMoveControls ? (
+                  <div className="moveButtons">
+                    <button
+                      aria-label="Move entry up"
+                      className="moveButton"
+                      disabled={!canMoveUp}
+                      onClick={() => moveEntry(entry.id, -1)}
+                      type="button"
+                    >
+                      ▴
+                    </button>
+                    <button
+                      aria-label="Move entry down"
+                      className="moveButton"
+                      disabled={!canMoveDown}
+                      onClick={() => moveEntry(entry.id, 1)}
+                      type="button"
+                    >
+                      ▾
+                    </button>
+                  </div>
+                ) : canRemove ? (
                   <button
                     aria-label="Remove row"
                     className="removeButton"
@@ -435,7 +483,7 @@ export default function App() {
                     -
                   </button>
                 ) : (
-                  <span aria-hidden="true" className="removeSpacer" />
+                  <span aria-hidden="true" className="controlSpacer" />
                 )}
 
                 {hasTime ? (
@@ -475,7 +523,7 @@ export default function App() {
                   </button>
                 )}
 
-                {hasTime ? (
+                {showArrowControl ? (
                   <button
                     className="arrowButton"
                     onClick={() =>

@@ -146,6 +146,7 @@ button {
 .navButton:hover,
 .ghostButton:hover,
 .arrowButton:hover,
+.moveButton:hover:not(:disabled),
 .timeButton:hover,
 .removeButton:hover {
   background: rgba(204, 218, 228, 0.08);
@@ -229,7 +230,8 @@ button {
 }
 
 .removeButton,
-.removeSpacer,
+.controlSpacer,
+.moveButtons,
 .timeInput,
 .timeButton,
 .arrowButton,
@@ -239,7 +241,7 @@ button {
 }
 
 .removeButton,
-.removeSpacer {
+.controlSpacer {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -253,6 +255,36 @@ button {
   border-radius: 999px;
   font-size: 1rem;
   line-height: 1;
+}
+
+.moveButtons,
+.controlSpacer {
+  width: 22px;
+}
+
+.moveButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.moveButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 17px;
+  width: 22px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: #97a4af;
+  line-height: 1;
+  font-size: 0.78rem;
+}
+
+.moveButton:disabled {
+  opacity: 0.28;
+  cursor: default;
 }
 
 .timeInput,
@@ -296,6 +328,7 @@ button {
 
 .textInput {
   width: 100%;
+  min-width: 0;
   padding: 0;
   color: #ebe4d7;
   background: transparent;
@@ -303,6 +336,7 @@ button {
   resize: none;
   overflow: hidden;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   word-break: break-word;
 }
 
@@ -340,6 +374,10 @@ button {
   .row {
     grid-template-columns: 18px 64px 38px minmax(0, 1fr);
     gap: 8px;
+  }
+
+  .textInput {
+    font-size: 16px;
   }
 
   .page::before {
